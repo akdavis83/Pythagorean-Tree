@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Green Pythagorean Tree with Clickable Buttons</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            height: 100vh;
+        }
+
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            z-index: 100;
+            font-size: 16px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .button-tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 200;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        🌳 Green Pythagorean Tree<br>
+        Click the circular buttons at branch ends!<br>
+        Mouse: Orbit | Scroll: Zoom
+    </div>
+    <div id="container"></div>
+    <div id="tooltip" class="button-tooltip"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x87CEEB, 1); // Sky blue background
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        // Camera controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Raycaster for mouse interaction
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const clickableButtons = [];
+        const tooltip = document.getElementById('tooltip');
+
+        // Pythagorean tree parameters
+        const maxDepth = 8;
+        const baseLength = 3;
+        const branchAngle = Math.PI / 4; // 45 degrees
+
+        // Array of GitHub repository websites (add more as needed)
+        const githubRepos = [
+            'https://akdavis83.github.io/HCube/',
+            // Add more repository URLs here as you provide them
+        ];
+
+        // Create branch geometry
+        function createBranch(length, thickness) {
+            const geometry = new THREE.CylinderGeometry(thickness, thickness * 0.8, length, 8);
+            const material = new THREE.MeshPhongMaterial({ 
+                color: new THREE.Color().setHSL(0.3, 0.8, 0.4 + Math.random() * 0.3) // Various shades of green
+            });
+            return new THREE.Mesh(geometry, material);
+        }
+
+        let buttonCounter = 0;
+
+        // Create clickable button at branch end
+        function createButton(position, branchId) {
+            const geometry = new THREE.SphereGeometry(0.15, 16, 16);
+            const material = new THREE.MeshPhongMaterial({ 
+                color: 0xffff00,
+                emissive: 0x444400,
+                shininess: 100
+            });
+            const button = new THREE.Mesh(geometry, material);
+            button.position.copy(position);
+            
+            // Get the GitHub repo URL for this button
+            const repoUrl = githubRepos[buttonCounter % githubRepos.length];
+            
+            button.userData = { 
+                isButton: true, 
+                branchId: branchId,
+                repoUrl: repoUrl,
+                originalColor: 0xffff00,
+                hoverColor: 0xff4444
+            };
+            
+            buttonCounter++;
+            
+            // Add glow effect
+            const glowGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffff00,
+                transparent: true,
+                opacity: 0.3
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            button.add(glow);
+            
+            clickableButtons.push(button);
+            scene.add(button);
+            return button;
+        }
+
+        // Recursive function to build Pythagorean tree
+        function buildTree(startPos, direction, length, depth, parentGroup) {
+            if (depth > maxDepth) return;
+
+            const thickness = 0.1 * (1 - depth / maxDepth) + 0.02;
+            const branch = createBranch(length, thickness);
+            
+            // Position branch
+            const endPos = startPos.clone().add(direction.clone().multiplyScalar(length));
+            branch.position.copy(startPos.clone().add(direction.clone().multiplyScalar(length / 2)));
+            
+            // Orient branch along direction
+            branch.lookAt(endPos);
+            branch.rotateX(Math.PI / 2);
+            
+            scene.add(branch);
+
+            // Create button at end of branch if it's a leaf (final depth)
+            if (depth >= maxDepth - 2) {
+                createButton(endPos, `branch_${depth}_${Math.random().toString(36).substr(2, 9)}`);
+            }
+
+            // Create child branches (Pythagorean tree pattern)
+            if (depth < maxDepth) {
+                const newLength = length * 0.7;
+                
+                // Left branch
+                const leftDirection = direction.clone();
+                leftDirection.applyAxisAngle(new THREE.Vector3(0, 0, 1), branchAngle);
+                buildTree(endPos, leftDirection, newLength, depth + 1, parentGroup);
+                
+                // Right branch
+                const rightDirection = direction.clone();
+                rightDirection.applyAxisAngle(new THREE.Vector3(0, 0, 1), -branchAngle);
+                buildTree(endPos, rightDirection, newLength, depth + 1, parentGroup);
+            }
+        }
+
+        // Mouse event handlers
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(clickableButtons);
+
+            // Reset all button colors
+            clickableButtons.forEach(button => {
+                button.material.color.setHex(button.userData.originalColor);
+                button.material.emissive.setHex(0x444400);
+            });
+
+            if (intersects.length > 0) {
+                const button = intersects[0].object;
+                button.material.color.setHex(button.userData.hoverColor);
+                button.material.emissive.setHex(0x664400);
+                
+                // Show tooltip
+                tooltip.style.display = 'block';
+                tooltip.style.left = event.clientX + 10 + 'px';
+                tooltip.style.top = event.clientY - 30 + 'px';
+                tooltip.textContent = `Click to visit: ${button.userData.repoUrl}`;
+                
+                document.body.style.cursor = 'pointer';
+            } else {
+                tooltip.style.display = 'none';
+                document.body.style.cursor = 'default';
+            }
+        }
+
+        function onMouseClick(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(clickableButtons);
+
+            if (intersects.length > 0) {
+                const button = intersects[0].object;
+                
+                // Button click animation
+                const originalScale = button.scale.clone();
+                button.scale.multiplyScalar(1.2);
+                setTimeout(() => {
+                    button.scale.copy(originalScale);
+                }, 150);
+                
+                // Navigate to GitHub repository website
+                window.open(button.userData.repoUrl, '_blank');
+                
+                console.log(`Button clicked: ${button.userData.branchId} - Opening: ${button.userData.repoUrl}`);
+            }
+        }
+
+        // Add event listeners
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('click', onMouseClick);
+
+        // Lighting setup
+        function setupLighting() {
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+            
+            // Directional light (sun)
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            // Additional point light for better illumination
+            const pointLight = new THREE.PointLight(0xffffff, 0.5, 100);
+            pointLight.position.set(-5, 5, 5);
+            scene.add(pointLight);
+        }
+
+        // Initialize scene
+        setupLighting();
+
+        // Build the Pythagorean tree
+        const startPosition = new THREE.Vector3(0, -5, 0);
+        const initialDirection = new THREE.Vector3(0, 1, 0);
+        buildTree(startPosition, initialDirection, baseLength, 0);
+
+        // Position camera
+        camera.position.set(8, 5, 8);
+        camera.lookAt(0, 0, 0);
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Animate button glow
+            clickableButtons.forEach((button, index) => {
+                const time = Date.now() * 0.001;
+                const glow = button.children[0];
+                if (glow) {
+                    glow.material.opacity = 0.2 + 0.2 * Math.sin(time * 2 + index);
+                }
+            });
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>
